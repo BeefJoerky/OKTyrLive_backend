@@ -3,9 +3,6 @@ import xml.etree.ElementTree as et
 import mysql.connector
 import xmltodict
 
-PASSWORD = "sm2025mop"
-COMPETITION_ID = "10"
-
 MOP_XML_PREFIX = '<?xml version="1.0"?>'
 
 MOP_STATUS = Enum("MOP_STATUS", [
@@ -131,6 +128,9 @@ class MOPService:
 
         statement = f"INSERT INTO {table} (`cid`, `id`, `leg`, `ord`, `{column}`) VALUES ({self.competition_id}, {id}, " + "%s, %s, %s)"
 
+        # SHIT CODE, COPIED FROM functions.php.
+        # "leg" means the course, since the class can have multiple courses
+        # for relays, it means the relay leg, because a relay class has multiple legs
         data = []
         for leg in legs:
             if len(leg) > 0:
@@ -141,6 +141,44 @@ class MOPService:
             leg_number += 1
 
         self.cursor.executemany(statement, data)
+
+
+    def process_radio_distances_individual(self, data_json):
+        classes = data_json.get("classes")
+
+        # For individual competitions, assume every class has roughly equal split distances, regardless of course
+        # For qualifiqations, this can differ more, but is ignored and considered within margin of error
+        # Each (class)id-control pair thus has a unique split distance
+
+        statement = f"UPDATE mopClassControl SET distance=%s WHERE cid={self.competition_id} AND id=%s AND ctrl=%s"
+        persist_data = []
+        for cls, radios in classes.items():
+            for radio in radios:
+                radio_control_number = radio.get("controlId")
+                radio_distance = radio.get("distance")
+                persist_data.append((radio_distance, int(cls), radio_control_number))
+
+        self.cursor.executemany(statement, persist_data)
+        self.connection.commit()
+
+
+    def process_radio_distances_relay(self, data_json):
+        classes = data_json.get("classes")
+
+        # For relays, assume each leg has roughly equal split distances, regardless of forked course
+        # Each (class)id-leg-control pair thus has a unique split distance
+
+        statement = f"UPDATE mopClassControl SET distance=%s WHERE cid={self.competition_id} AND id=%s AND leg=%s AND ctrl=%s"
+        persist_data = []
+        for cls, legs in classes.items():
+            for leg, radios in legs.items():
+                for radio in radios:
+                    radio_control_number = radio.get("controlId")
+                    radio_distance = radio.get("distance")
+                    persist_data.append((radio_distance, int(cls), int(leg), int(radio_control_number)))
+        
+        self.cursor.executemany(statement, persist_data)
+        self.connection.commit()
 
 
     def process_competitor(self, competitor: dict):
