@@ -55,7 +55,7 @@ class MOPService:
             database=dbname,
             charset="utf8mb3"
         )
-        self.cursor = self.connection.cursor()
+        self.cursor = self.connection.cursor(dictionary=True)
         self.competition_id = competition_id    # Support for multiple competitions in persistent layer
 
 
@@ -302,3 +302,11 @@ class MOPService:
 
         statement = f"`name`='{name}', `date`='{date}', `organizer`='{organizer}', `homepage`='{homepage}'"
         self.save("mopCompetition", 1, statement)  # id=1 because cid, that is, competition_id, is always different between competitions
+
+
+    def get_runners_by_class(self, cls):
+        statement = f"SELECT comp.bib, comp.name AS name, orgs.name AS club, comp.st, comp.rt, comp.stat FROM mopcompetitor AS comp JOIN moporganization AS orgs WHERE comp.cls={cls} AND orgs.id=comp.org AND comp.cid={self.competition_id} AND orgs.cid={self.competition_id} ORDER BY comp.rt"
+
+        self.cursor.execute(statement)
+        data = self.cursor.fetchall()
+        return data

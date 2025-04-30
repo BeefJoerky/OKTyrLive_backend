@@ -161,9 +161,13 @@ def load_radio_distances_relay():
     return Response(status=200)
 
 
+# For getting all runners in a class
 @app.route('/api/<competition>/<cls>/runners', methods=["GET"])
 def get_runners_for_class(competition, cls):
-    pass
+    # TODO: correct encoding and make correct return format
+    data = mop_service.get_runners_by_class(cls)
+    return jsonify(data)
+    
 
 
 @app.route('/api/<competition>/<cls>/runners/<bib>', methods=["GET"])
