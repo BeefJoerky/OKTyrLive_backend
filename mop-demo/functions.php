@@ -110,7 +110,7 @@ function calculateResult($res) {
     }
     else {
       $row['place'] = "";
-      $row['name'] = $r['name'];      
+      $row['name'] = $r['name'];
       $row['team'] = $r['team'];
 
       $row['time'] = getStatusString($r['status']);

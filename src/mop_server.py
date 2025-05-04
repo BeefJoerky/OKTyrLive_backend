@@ -16,8 +16,13 @@ et.register_namespace('', 'http://www.melin.nu/mop')
 
 def xml_response(xml):
     xml_string = MOP_XML_PREFIX + et.tostring(xml, encoding="unicode")
-    print(xml_string)
     return Response(xml_string, mimetype="application/xml", status=200)
+
+
+def json_response(data):
+    out = json.dumps(data, ensure_ascii=False, indent=2)
+    return Response(out, content_type='application/json', status=200)
+
 
 def pretty_print(root):
     rough_string = et.tostring(root, encoding='utf-8', method='xml')
@@ -164,22 +169,45 @@ def load_radio_distances_relay():
 # For getting all runners in a class
 @app.route('/api/<competition>/<cls>/runners', methods=["GET"])
 def get_runners_for_class(competition, cls):
-    # TODO: correct encoding and make correct return format
     data = mop_service.get_runners_by_class(cls)
-    return jsonify(data)
-    
+    return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/runners/<bib>', methods=["GET"])
 def get_runner_with_bib_for_class(competition, cls, bib):
-    pass
+    data = mop_service.get_runner_with_bib_by_class(cls, bib)
+    return json_response(data)
 
 
-@app.route('/api/<competition>/<cls>/<radio>/runners', methods=["GET"])
+@app.route('/api/<competition>/<cls>/splits/<radio>', methods=["GET"])
 def get_radio_passed_runners(competition, cls, radio):
-    pass
+    if request.args.get("relay") is not None:
+        data = mop_service.get_runners_for_split_relay(cls, radio)
+    else:
+        data = mop_service.get_runners_for_split_individual(cls, radio)
+    return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/radiocontrols', methods=["GET"])
 def get_radio_controls_for_class(competition, cls):
-    pass
+    is_relay = request.args.get("relay") is not None
+    data = mop_service.get_radiocontrols_by_class(cls, is_relay)
+    return json_response(data)
+
+# Get start lists with specific format for application in broadcasting software SPX
+@app.route('/api/<competition>/<cls>/spx', methods=["GET"])
+def get_runners_for_class_spx(competition, cls):
+    data = mop_service.get_runners_by_class_spx(cls)
+    return json_response(data)
+
+
+@app.route('/api/<competition>/<cls>/results', methods=["GET"])
+def get_results_for_class(competition, cls):
+    data = mop_service.get_results_by_class(cls)
+    return json_response(data)
+
+
+@app.route('/api/<competition>/<cls>/results/<bib>', methods=["GET"])
+def get_results_with_bib_for_class(competition, cls, bib):
+    data = mop_service.get_results_by_class_with_bib(cls, bib)
+    return json_response(data)

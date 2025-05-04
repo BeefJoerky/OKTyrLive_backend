@@ -1,0 +1,197 @@
+API Endpoints
+
+v1 UPDATED 30/4-2025
+
+GET: start list containing runner items. 
+KEY: competition + class
+URL: /api/{competition}/{class}/runners
+RESPONSE: All runners as an array of objects
+Example:
+{
+    "competition": "SM Medel Kval",
+    "class": "D21",
+    "runners": [
+        {
+            "bib": "101",
+            "name": "Anna Andersson",
+            "club": "OK Tyr",
+            "start_time": "12:00",
+        },
+        {
+            "bib": "102",
+            "name": "Lisa Bergström",
+            "club": "IFK Göteborg",
+            "start_time": "12:02",
+        },
+        {
+            "bib": "103",
+            "name": "Karin Johansson",
+            "club": "OK Djerf",
+            "start_time": "12:04",
+        },
+    ],
+}
+
+GET: item with specific runner
+KEY: competiton + class + bib
+URL: /api/{competition}/{class}/runners/{bib}
+RESPONSE: runner as an array with single item
+
+Example:
+{
+    "competition": "SM Medel Kval",
+    "class": "H21",
+    "runners": [
+        {
+            "bib": "444",
+            "name": "Ferry Fyråsen",
+            "club": "OK Fyran",
+            "start_time": "14:44",
+        },
+    ],
+}
+
+För split-tider under tävlingarna:
+GET: list with items of runners that have passed a radio and registered a split final_time
+KEY: competition + class + radio_number
+URL: /api/{competition}/{class}/splits/{radio_number}
+
+Exempel:
+{
+    "competition": "SM Medel Kval",
+    "class": "D21",
+    "split": {
+        "id": 150,
+        "name": "Radio 2,9 km",
+        "runners": [
+            {
+                "team": NULL
+                "bib": "144",
+                "name": "Eva Rådberg",
+                "club": "OK Tyr"
+                "start_time": 745900,
+                "split_time": 753878
+            }
+        ]
+    }
+}
+
+Exempel /api/{competition}/{class}/splits/{radio_number}?relay
+{
+    "competition": "SM Medel Kval",
+    "class": "D21",
+    "split": {
+        "id": 150,
+        "name": "Radio 2,9 km",
+        "runners": [
+            {
+                team: "OK Tyr 1"
+                "bib": "144",
+                "name": "Eva Rådberg",
+                "club": "OK Tyr",
+                "start_time": 745900,
+                "split_time": 753878
+            }
+        ]
+    }
+}
+
+Endpoint för radiokontroller för en klass
+GET: list with all radio controls for a given competition and class
+KEY: competition + class
+URL: /api/{competition}/{class}/radiocontrols
+RESPONSE: Array of radio control objects
+
+Exempel:
+{
+    "radiocontrols": [
+        {
+            "id": 150,
+            "name": "Radio 1: 2,9 km"
+        },
+        {
+            "id": 100,
+            "name": "Förvarning"
+        }
+    ]
+}
+
+
+GET: start lists with specific format for application in broadcasting software SPX
+KEY: competition + class
+URLL: /api/{competition}/{class}/spx
+
+Exempel:
+{
+    "item1": [
+        {"field": "f0", "ftype": "number", "title": "Bib", "value": "444"},
+        {"field": "f1", "ftype": "textfield", "title": "Fullname", "value": "Namn Namnsson"},
+        {"field": "f2", "ftype": "textfield", "title": "Club", "value": "OK Tyr"}
+        {"field": "f4", "ftype": "textfield", "title": "Class", "value": "D21"},
+        {"field": "f5", "ftype": "textfield", "title": "Starttime", "value": "12:00"}
+    ]
+}
+
+
+GET: list with items of runners with place and running time. Also includes disqualified runners. Place calculation and ordering is done on server
+KEY: competition + class
+URL: /api/{competition}/{class}/results
+
+Exempel:
+{
+    "competition": "SM Medel Final",
+    "class": "D21 Final A",
+    "results": [
+        {
+            "place": 1,
+            "bib": "114",
+            "name": "Eva Rådberg",
+            "club": "Skellefteå OK",
+            "splits": [1990, 2780, 3910]
+            "running_time": 3980,
+            "time_after_leader": 0,
+            "status": 1
+        },
+        {
+            "place": 2
+            "bib": "125",
+            "name": "Lena Isaksson",
+            "club": "Deje SF",
+            "splits": [1950, 2800, 4020]
+            "running_time": 4080,
+            "time_after_leader": 100,
+            "status": 1
+        },
+        {
+            "place": null
+            "bib": "135",
+            "name": "Birgitta Karlsson",
+            "club": "Kils OK",
+            "splits": [1920, 2650, 3900]
+            "running_time": 3960,
+            "time_after_leader": null,
+            "status" 3: 
+        },
+    ]
+}
+
+
+GET item containing results for specific runner
+KEY: competition + class + bib
+URL: /api/{competition}/{class}/results/{bib}
+
+Exempel:
+{
+    "competition": "SM Medel Final",
+    "class": "D21 Final A",
+    "results": {
+        "place": 1,
+        "bib": "114",
+        "name": "Eva Rådberg",
+        "club": "Skellefteå OK",
+        "splits": [1990, 2780, 3910]
+        "running_time": 3980,
+        "time_after_leader": 0,
+        "status": 1
+    }
+}
