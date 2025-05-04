@@ -5,7 +5,7 @@ from mop import *
 from flask import *
 
 PASSWORD = "sm2025mop"
-COMPETITION_ID = "10"
+COMPETITION_ID = "11"
 
 
 app = Flask(__name__)
@@ -169,45 +169,45 @@ def load_radio_distances_relay():
 # For getting all runners in a class
 @app.route('/api/<competition>/<cls>/runners', methods=["GET"])
 def get_runners_for_class(competition, cls):
-    data = mop_service.get_runners_by_class(cls)
+    data = mop_service.get_runners_by_class(competition, cls)
     return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/runners/<bib>', methods=["GET"])
 def get_runner_with_bib_for_class(competition, cls, bib):
-    data = mop_service.get_runner_with_bib_by_class(cls, bib)
+    data = mop_service.get_runner_with_bib_by_class(competition, cls, bib)
     return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/splits/<radio>', methods=["GET"])
 def get_radio_passed_runners(competition, cls, radio):
     if request.args.get("relay") is not None:
-        data = mop_service.get_runners_for_split_relay(cls, radio)
+        data = mop_service.get_runners_for_split_relay(competition, cls, radio)
     else:
-        data = mop_service.get_runners_for_split_individual(cls, radio)
+        data = mop_service.get_runners_for_split_individual(competition, cls, radio)
     return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/radiocontrols', methods=["GET"])
 def get_radio_controls_for_class(competition, cls):
     is_relay = request.args.get("relay") is not None
-    data = mop_service.get_radiocontrols_by_class(cls, is_relay)
+    data = mop_service.get_radiocontrols_by_class(competition, cls, is_relay)
     return json_response(data)
 
 # Get start lists with specific format for application in broadcasting software SPX
 @app.route('/api/<competition>/<cls>/spx', methods=["GET"])
 def get_runners_for_class_spx(competition, cls):
-    data = mop_service.get_runners_by_class_spx(cls)
+    data = mop_service.get_runners_by_class_spx(competition, cls)
     return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/results', methods=["GET"])
 def get_results_for_class(competition, cls):
-    data = mop_service.get_results_by_class(cls)
+    data = mop_service.get_results_by_class(competition, cls)
     return json_response(data)
 
 
 @app.route('/api/<competition>/<cls>/results/<bib>', methods=["GET"])
 def get_results_with_bib_for_class(competition, cls, bib):
-    data = mop_service.get_results_by_class_with_bib(cls, bib)
+    data = mop_service.get_results_by_class_with_bib(competition, cls, bib)
     return json_response(data)

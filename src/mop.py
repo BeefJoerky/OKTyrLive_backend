@@ -60,7 +60,8 @@ class MOPService:
             user=dbusr,
             password=dbpwd,
             database=dbname,
-            charset= "utf8"
+            charset= "utf8",
+            collation="utf8mb4_general_ci"
         )
         self.cursor = self.connection.cursor(dictionary=True)
         self.competition_id = competition_id    # Support for multiple competitions in persistent layer
@@ -311,32 +312,19 @@ class MOPService:
         self.save("mopCompetition", 1, statement)  # id=1 because cid, that is, competition_id, is always different between competitions
 
 
-    def get_runners_by_class(self, cls):
-        statement = f"SELECT comp.bib, comp.name AS name, orgs.name AS club, comp.st as start_time FROM mopcompetitor AS comp JOIN moporganization AS orgs WHERE comp.cls={cls} AND orgs.id=comp.org AND comp.cid={self.competition_id} AND orgs.cid={self.competition_id} ORDER BY comp.rt"
+    def get_runners_by_class(self, cmp, cls):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.bib, runner.name, orgs.name AS club, runner.st AS start_time "
+        statement += "FROM mopcompetitor AS runner "
+        statement += "LEFT JOIN moporganization AS orgs ON orgs.id=runner.org AND orgs.cid=runner.cid "
+        statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
+        statement += "JOIN mopclass AS cls ON cls.id=runner.cls AND cls.cid=runner.cid "
+        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} "
+        statement += "ORDER BY start_time"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
 
-        statement = f"SELECT c.name as competition, cl.name as class FROM mopcompetition AS c JOIN mopclass as cl WHERE c.cid={self.competition_id} AND cl.cid={self.competition_id} AND cl.id={cls}"
-        self.cursor.execute(statement)
-        metadata = self.cursor.fetchall()
-
-        out = {
-            "competition": metadata[0].get("competition"),
-            "class": metadata[0].get("class"),
-            "runners": []
-        }
-
-        for runner in data:
-            runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
-            out["runners"].append(runner)
-
-        return out
-    
-
-    def get_runner_with_bib_by_class(self, cls, bib):
-        statement = f"SELECT competition.name as competition, class.name as class, comp.bib, comp.name AS name, orgs.name AS club, comp.st as start_time FROM mopcompetitor AS comp JOIN moporganization AS orgs JOIN mopcompetition AS competition JOIN mopclass AS class WHERE comp.cls={cls} AND orgs.id=comp.org AND comp.cid={self.competition_id} AND orgs.cid={self.competition_id} AND comp.bib={bib} AND competition.cid={self.competition_id} AND class.cid={self.competition_id} AND class.id={cls} ORDER BY comp.rt"
-        self.cursor.execute(statement)
-        data = self.cursor.fetchall()
+        if data is None or len(data) == 0:
+            return "No data"
 
         out = {
             "competition": data[0].get("competition"),
@@ -345,19 +333,62 @@ class MOPService:
         }
 
         for runner in data:
-            runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
-            out["runners"].append(runner)
+            #runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
+            out["runners"].append({
+                "bib": runner["bib"],
+                "runner_club": runner["club"],
+                "name": runner["name"],
+                "start_time": runner["start_time"]
+            })
+
+        return out
+    
+
+    def get_runner_with_bib_by_class(self, cmp, cls, bib):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.bib, runner.name, orgs.name AS club, runner.st AS start_time "
+        statement += "FROM mopcompetitor AS runner "
+        statement += "LEFT JOIN moporganization AS orgs ON orgs.id=runner.id AND orgs.cid=runner.cid "
+        statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
+        statement += "JOIN mopclass AS cls ON cls.id=runner.cls "
+        statement += f"WHERE runner.cls={cls} AND runner.bib={bib} AND runner.cid={cmp} "
+        statement += "ORDER BY start_time"
+        self.cursor.execute(statement)
+        data = self.cursor.fetchall()
+
+        if data is None or len(data) == 0:
+            return "No data"
+
+        out = {
+            "competition": data[0].get("competition"),
+            "class": data[0].get("class"),
+            "runners": []
+        }
+
+        for runner in data:
+            #runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
+            out["runners"].append({
+                "bib": runner["bib"],
+                "runner_class": runner["class"],
+                "club": runner["club"],
+                "name": runner["name"],
+                "start_time": runner["start_time"]
+            })
 
         return out
 
 
-    def get_radiocontrols_by_class(self, cls, is_relay):
-        #TODO: make order by correct
-        statement = f"SELECT competition.name as competition, cls.name as class, clctrl.ctrl as id, clctrl.distance as name, clctrl.leg FROM mopclass AS cls "
-        statement += f"JOIN mopcompetition as competition JOIN mopclasscontrol as clctrl WHERE competition.cid={self.competition_id} AND cls.cid={self.competition_id} "
-        statement += f"AND cls.id={cls} AND cls.id=clctrl.id"
+    def get_radiocontrols_by_class(self, cmp, cls, is_relay):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, clctrl.ctrl AS id, clctrl.distance AS name, clctrl.ord, clctrl.leg "
+        statement += "FROM mopclass AS cls "
+        statement += "JOIN mopclasscontrol AS clctrl ON cls.cid=clctrl.cid AND cls.id=clctrl.id "
+        statement += "JOIN mopcompetition as cmp ON cls.cid=cmp.cid "
+        statement += f"WHERE cls.id={cls} AND cls.cid={cmp} "
+        statement += "ORDER BY leg, ord"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
+
+        if data is None or len(data) == 0:
+            return "No data"
 
         out = {
             "competition": data[0].get("competition"),
@@ -381,7 +412,7 @@ class MOPService:
         return out
     
 
-    def get_runners_for_split_relay(self, cls, radio):
+    def get_runners_for_split_relay(self, cmp, cls, radio):
         statement = "SELECT DISTINCT cmp.name as competition, cls.name as class, tm.leg, "
         statement += "radio.ctrl as id, clctrl.distance, team.`name` AS team, runner.bib, org.name as club, "
         statement += "runner.name, runner.st AS start_time, radio.rt AS split_time "
@@ -393,7 +424,7 @@ class MOPService:
         statement += "JOIN mopclasscontrol AS clctrl ON clctrl.leg=tm.leg AND clctrl.ctrl=radio.ctrl AND clctrl.id=runner.cls AND clctrl.cid=radio.cid "
         statement += "LEFT JOIN mopteam AS team ON team.id=tm.id AND tm.cid=radio.cid "
         statement += "JOIN moporganization AS org ON org.id=team.org AND org.cid=radio.cid "
-        statement += f"WHERE runner.cls={cls} AND radio.cid={self.competition_id} AND radio.ctrl={radio} "
+        statement += f"WHERE runner.cls={cls} AND radio.cid={cmp} AND radio.ctrl={radio} "
         statement += "ORDER by leg, split_time"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
@@ -430,7 +461,7 @@ class MOPService:
         return out
     
 
-    def get_runners_for_split_individual(self, cls, radio):
+    def get_runners_for_split_individual(self, cmp, cls, radio):
         statement = "SELECT DISTINCT cmp.name as competition, cls.name as class, "
         statement += "radio.ctrl AS id, clctrl.distance, runner.bib, org.`name` AS club, "
         statement += "runner.name, runner.st AS start_time, radio.rt AS split_time "
@@ -440,7 +471,7 @@ class MOPService:
         statement += "JOIN mopclass AS cls ON cls.id=runner.cls "
         statement += "JOIN mopclasscontrol AS clctrl ON clctrl.ctrl=radio.ctrl AND clctrl.id=runner.cls AND clctrl.cid=radio.cid "
         statement += "JOIN moporganization AS org ON org.id=runner.org AND org.cid=radio.cid "
-        statement += f"WHERE runner.cls={cls} AND radio.cid={self.competition_id} AND radio.ctrl={radio} "
+        statement += f"WHERE runner.cls={cls} AND radio.cid={cmp} AND radio.ctrl={radio} "
         statement += "ORDER by split_time"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
@@ -468,15 +499,15 @@ class MOPService:
         return out
     
 
-    def get_results_by_class(self, cls):
-        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.bib, runner.name, org.name AS club, "
+    def get_results_by_class(self, cmp, cls):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.id AS runner_id, runner.bib, runner.name, org.name AS club, "
         statement += "split.rt AS split, runner.st AS start_time, runner.rt AS running_time, runner.stat AS `status` "
         statement += "FROM mopcompetitor AS runner "
         statement += "JOIN mopradio AS split ON split.id=runner.id AND split.cid=runner.cid "
-        statement += "JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
+        statement += "LEFT JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
         statement += "JOIN mopclass AS cls ON cls.cid=runner.cid AND cls.id=runner.cls "
         statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
-        statement += f"WHERE runner.cls={cls} AND runner.cid={self.competition_id} "
+        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} "
         statement += "ORDER BY running_time, split"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
@@ -493,16 +524,21 @@ class MOPService:
         runner_data = self.calculate_results(data)
 
         i = 0
-        bib = -1
+        runner_id = -1
         for runner in data:
-            if runner["bib"] == bib:    # Same runner
+            if runner["runner_id"] == runner_id:    # Same runner
                 continue
             else:                       # New runner
-                bib = runner["bib"]
+                runner_id = runner["runner_id"]
 
+
+            if runner_data[i][3][0] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
+                place = ""
+            else:
+                place = runner_data[i][0]
 
             out["results"].append({
-                "place": runner_data[i][0],
+                "place": place,
                 "bib": runner["bib"],
                 "name": runner["name"],
                 "club": runner["club"],
@@ -510,22 +546,22 @@ class MOPService:
                 "start_time": runner["start_time"],
                 "running_time": runner["running_time"],
                 "timeplus": runner_data[i][1],
-                "status": runner["status"]
+                "status": runner_data[i][3][1]
             })
             i += 1
 
         return out
     
 
-    def get_results_by_class_with_bib(self, cls, bib):
-        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.bib, runner.name, org.name AS club, "
+    def get_results_by_class_with_bib(self, cmp, cls, bib):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.id as runner_id, runner.bib, runner.name, org.name AS club, "
         statement += "split.rt AS split, runner.st AS start_time, runner.rt AS running_time, runner.stat AS `status` "
         statement += "FROM mopcompetitor AS runner "
         statement += "JOIN mopradio AS split ON split.id=runner.id AND split.cid=runner.cid "
-        statement += "JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
+        statement += "LEFT JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
         statement += "JOIN mopclass AS cls ON cls.cid=runner.cid AND cls.id=runner.cls "
         statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
-        statement += f"WHERE runner.cls={cls} AND runner.cid={self.competition_id} AND runner.bib={bib} "
+        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} AND runner.bib={bib} "
         statement += "ORDER BY running_time, split"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
@@ -542,16 +578,21 @@ class MOPService:
         runner_data = self.calculate_results(data)
 
         i = 0
-        bib = -1
+        runner_id = -1
         for runner in data:
-            if runner["bib"] == bib:    # Same runner
+            if runner["runner_id"] == runner_id:    # Same runner
                 continue
             else:                       # New runner
-                bib = runner["bib"]
+                runner_id = runner["runner_id"]
 
+
+            if runner_data[i][3][0] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
+                place = ""
+            else:
+                place = runner_data[i][0]
 
             out["results"].append({
-                "place": runner_data[i][0],
+                "place": place,
                 "bib": runner["bib"],
                 "name": runner["name"],
                 "club": runner["club"],
@@ -559,7 +600,7 @@ class MOPService:
                 "start_time": runner["start_time"],
                 "running_time": runner["running_time"],
                 "timeplus": runner_data[i][1],
-                "status": runner["status"]
+                "status": runner_data[i][3][1]
             })
             i += 1
 
@@ -570,26 +611,34 @@ class MOPService:
         runner_data = []
         best_time = data[0]["running_time"]
         runner_time = -1
-        bib = -1
+        runner_id = -1
         i = -1
+        number_disqualified = 0
         for runner in data:
-            if runner["bib"] != bib:    # New runner
+            if runner["runner_id"] != runner_id:    # New runner
+                status = runner["status"]
+                if status != MOP_COMPETITOR.OK.value:
+                    number_disqualified += 1
+                    not_eligible = True
+                else:
+                    not_eligible = False
+
                 i += 1
-                bib = runner["bib"]
-                runner_data.append([i+1,  runner["running_time"] - best_time, []])
+                runner_id = runner["runner_id"]
+                runner_data.append([i+1 - number_disqualified,  runner["running_time"] - best_time, [], (not_eligible, MOP_COMPETITOR(status).name)])
 
             runner_data[i][2].append(runner["split"])
 
         return runner_data
     
 
-    def get_runners_by_class_spx(self, cls):
+    def get_runners_by_class_spx(self, cmp, cls):
         statement = "SELECT cmp.name as competition, runner.bib, runner.name, org.name AS club, cls.name AS class, runner.st AS start_time "
         statement += "FROM mopcompetitor AS runner "
         statement += "JOIN mopclass AS cls ON cls.id=runner.cls AND cls.cid=runner.cid "
         statement += "JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
         statement += "JOIN mopcompetition AS cmp on cmp.cid=runner.cid "
-        statement += f"WHERE runner.cid=10 "
+        statement += f"WHERE runner.cid={cmp} AND runner.cls={cls} "
         statement += "ORDER BY start_time"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
