@@ -16,12 +16,16 @@ et.register_namespace('', 'http://www.melin.nu/mop')
 
 def xml_response(xml):
     xml_string = MOP_XML_PREFIX + et.tostring(xml, encoding="unicode")
-    return Response(xml_string, mimetype="application/xml", status=200)
+    response = Response(xml_string, mimetype="application/xml", status=200)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
 
 
 def json_response(data):
     out = json.dumps(data, ensure_ascii=False, indent=2)
-    return Response(out, content_type='application/json', status=200)
+    response = Response(out, content_type='application/json', status=200)
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
 
 
 def pretty_print(root):
@@ -203,7 +207,15 @@ def get_runners_for_class_spx(competition, cls):
 
 @app.route('/api/<competition>/<cls>/results', methods=["GET"])
 def get_results_for_class(competition, cls):
-    data = mop_service.get_results_by_class(competition, cls)
+    is_relay = request.args.get("relay") is not None
+    get_total = is_relay and request.args.get("total") is not None
+
+    if get_total:
+        pass
+    elif is_relay:
+        pass
+    else:
+        data = mop_service.get_results_by_class(competition, cls)
     return json_response(data)
 
 

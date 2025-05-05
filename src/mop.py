@@ -2,6 +2,7 @@ from enum import Enum
 import xml.etree.ElementTree as et
 import mysql.connector
 import xmltodict
+from collections import namedtuple
 
 MOP_XML_PREFIX = '<?xml version="1.0"?>'
 
@@ -26,6 +27,8 @@ MOP_COMPETITOR = Enum("MOP_COMPETITOR", [
     ("CANCEL", 21),
     ("NP", 99)
 ])
+
+runnerData = namedtuple("variables", ["place", "team_place", "team_running_time", "timeplus", "splits", "status", "team_status"])
 
 def mop_response(mop_status_code: MOP_STATUS):
     """
@@ -349,7 +352,7 @@ class MOPService:
         statement += "FROM mopcompetitor AS runner "
         statement += "LEFT JOIN moporganization AS orgs ON orgs.id=runner.id AND orgs.cid=runner.cid "
         statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
-        statement += "JOIN mopclass AS cls ON cls.id=runner.cls "
+        statement += "JOIN mopclass AS cls ON cls.id=runner.cls AND cls.cid=runner.cid "
         statement += f"WHERE runner.cls={cls} AND runner.bib={bib} AND runner.cid={cmp} "
         statement += "ORDER BY start_time"
         self.cursor.execute(statement)
@@ -360,19 +363,22 @@ class MOPService:
 
         out = {
             "competition": data[0].get("competition"),
-            "class": data[0].get("class"),
-            "runners": []
+            "runner_class": data[0].get("class"),
+            "bib": data[0]["bib"],
+            "runner_club": data[0]["club"],
+            "name": data[0]["name"],
+            "start_time": data[0]["start_time"]
         }
 
-        for runner in data:
-            #runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
-            out["runners"].append({
-                "bib": runner["bib"],
-                "runner_class": runner["class"],
-                "club": runner["club"],
-                "name": runner["name"],
-                "start_time": runner["start_time"]
-            })
+        #for runner in data:
+        #    #runner["start_time"] = format_time(runner["start_time"], "hh:mm:ss")
+        #    out["runners"].append({
+        #        "bib": runner["bib"],
+        #        "runner_class": runner["class"],
+        #        "club": runner["club"],
+        #        "name": runner["name"],
+        #        "start_time": runner["start_time"]
+        #    })
 
         return out
 
@@ -392,7 +398,7 @@ class MOPService:
 
         out = {
             "competition": data[0].get("competition"),
-            "class": data[0].get("class"),
+            "runner_class": data[0].get("class"),
             "radiocontrols": []
         }
 
@@ -434,7 +440,7 @@ class MOPService:
 
         out = {
             "competition": data[0]["competition"],
-            "class": data[0]["class"],
+            "runner_class": data[0]["class"],
             "splits": {
                 
             }
@@ -481,7 +487,7 @@ class MOPService:
 
         out = {
             "competition": data[0]["competition"],
-            "class": data[0]["class"],
+            "runner_class": data[0]["class"],
             "id": data[0]["id"],
             "name": data[0]["distance"],
             "splits": []
@@ -517,38 +523,36 @@ class MOPService:
 
         out = {
             "competition": data[0]["competition"],
-            "class": data[0]["class"],
+            "runner_class": data[0]["class"],
             "results": []
         }
 
         runner_data = self.calculate_results(data)
 
-        i = 0
         runner_id = -1
         for runner in data:
             if runner["runner_id"] == runner_id:    # Same runner
                 continue
-            else:                       # New runner
+            else:                                   # New runner
                 runner_id = runner["runner_id"]
 
 
-            if runner_data[i][3][0] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
-                place = ""
-            else:
-                place = runner_data[i][0]
+            #if runner_data[runner_id][3] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
+            #    place = ""
+            #else:
+            #    place = runner_data[runner_id][0]
 
             out["results"].append({
-                "place": place,
+                "place": runner_data[runner_id].place,
                 "bib": runner["bib"],
                 "name": runner["name"],
                 "club": runner["club"],
-                "splits": runner_data[i][2],
+                "splits": runner_data[runner_id].splits,
                 "start_time": runner["start_time"],
                 "running_time": runner["running_time"],
-                "timeplus": runner_data[i][1],
-                "status": runner_data[i][3][1]
+                "timeplus": runner_data[runner_id].timeplus,
+                "status": runner_data[runner_id].status
             })
-            i += 1
 
         return out
     
@@ -561,7 +565,7 @@ class MOPService:
         statement += "LEFT JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
         statement += "JOIN mopclass AS cls ON cls.cid=runner.cid AND cls.id=runner.cls "
         statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
-        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} AND runner.bib={bib} "
+        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} " #AND runner.bib={bib} "
         statement += "ORDER BY running_time, split"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
@@ -569,65 +573,111 @@ class MOPService:
         if data is None or len(data) == 0:
             return "No data"
 
-        out = {
-            "competition": data[0]["competition"],
-            "class": data[0]["class"],
-            "results": []
-        }
+        runner = None
+        runner_id = -1
+        for a_runner in data:             # Get the runner id for the specific runner. Assume that bib is unique. Relays need different implementation
+            if str(a_runner["bib"]) == bib:
+                runner_id = a_runner["runner_id"]
+                runner = a_runner
+                break
+        else:
+            return "No data"
+
 
         runner_data = self.calculate_results(data)
+        #if runner_data[runner_id][3] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
+        #    place = ""
+        #else:
+        #    place = runner_data[runner_id][0]
 
-        i = 0
-        runner_id = -1
-        for runner in data:
-            if runner["runner_id"] == runner_id:    # Same runner
-                continue
-            else:                       # New runner
-                runner_id = runner["runner_id"]
-
-
-            if runner_data[i][3][0] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
-                place = ""
-            else:
-                place = runner_data[i][0]
-
-            out["results"].append({
-                "place": place,
-                "bib": runner["bib"],
-                "name": runner["name"],
-                "club": runner["club"],
-                "splits": runner_data[i][2],
-                "start_time": runner["start_time"],
-                "running_time": runner["running_time"],
-                "timeplus": runner_data[i][1],
-                "status": runner_data[i][3][1]
-            })
-            i += 1
+        out = {
+            "competition": runner["competition"],
+            "runner_class": runner["class"],
+            "place": runner_data[runner_id].place,
+            "bib": runner["bib"],
+            "name": runner["name"],
+            "club": runner["club"],
+            "splits": runner_data[runner_id].splits,
+            "start_time": runner["start_time"],
+            "running_time": runner["running_time"],
+            "timeplus": runner_data[runner_id].timeplus,
+            "status": runner_data[runner_id].status
+        }
 
         return out
     
 
-    def calculate_results(self, data: list):
-        runner_data = []
-        best_time = data[0]["running_time"]
-        runner_time = -1
+    def calculate_results(self, data: list) -> dict[int, runnerData]:
+        runner_data = {}
+        best_time = 0 
         runner_id = -1
-        i = -1
+        place_counter = -1
         number_disqualified = 0
         for runner in data:
             if runner["runner_id"] != runner_id:    # New runner
+                place_counter += 1
                 status = runner["status"]
                 if status != MOP_COMPETITOR.OK.value:
                     number_disqualified += 1
-                    not_eligible = True
+                    place = ""
                 else:
-                    not_eligible = False
+                    place = str(place_counter+1 - number_disqualified)
 
-                i += 1
+                if place != "" and best_time == 0:
+                    best_time = runner["running_time"]
+
                 runner_id = runner["runner_id"]
-                runner_data.append([i+1 - number_disqualified,  runner["running_time"] - best_time, [], (not_eligible, MOP_COMPETITOR(status).name)])
+                runner_data[runner_id] = runnerData(place, None, None, runner["running_time"] - best_time, [], MOP_COMPETITOR(status).name, None)
 
-            runner_data[i][2].append(runner["split"])
+            runner_data[runner_id].splits.append(runner["split"])
+
+        return runner_data
+    
+
+    def calculate_results_relay(self, data: list) -> dict[int, runnerData]:
+        runner_data = {}
+
+        leg = 0
+        leg_team_best_times = []
+        team_best_time = 0
+        best_time = 0 
+        runner_id = -1
+        place_counter = -1
+        number_disqualified = 0
+        for runner in data:
+            if runner["leg"] != leg:    # New leg. Order is guaranteed
+                leg = runner["leg"]
+                leg_team_best_times.insert(leg, team_best_time)
+                best_time = 0           # Reset counters
+                place_counter = -1
+
+            if runner["runner_id"] != runner_id:    # New runner
+                place_counter += 1
+                status = runner["status"]
+                if status != MOP_COMPETITOR.OK.value:
+                    number_disqualified += 1
+                    place = ""
+                else:
+                    place = str(place_counter+1 - number_disqualified)
+
+                if place != "" and best_time == 0:
+                    best_time = runner["running_time"]
+                    if runner["team_status"] == MOP_COMPETITOR.OK.value:
+                        team_best_time = best_time + (runner["start_time"] - runner["team_start_time"])
+
+
+                runner_id = runner["runner_id"]
+                runner_data[runner_id][f"leg{leg}"] = runnerData(place, None, None, runner["running_time"] - best_time, [], MOP_COMPETITOR(status).name, None)
+
+            runner_data[runner_id].splits.append(runner["split"])
+
+        place_counter = -1
+        for leg in runner_data.keys():
+            for runner in runner_data[leg]:
+                # tilldela en plats till varje löpare baserat på löparens lag-tid
+                pass
+
+
 
         return runner_data
     
@@ -648,6 +698,7 @@ class MOPService:
         
         out = {
             "competition": data[0]["competition"],
+            "runner_class": data[0]["class"]
         }
 
         i = 0
@@ -656,10 +707,75 @@ class MOPService:
             out[f"item{i}"] = [
                 {"field": "f0", "ftype": "number", "title": "Bib", "value": runner["bib"]},
                 {"field": "f1", "ftype": "textfield", "title": "Fullname", "value": runner["name"]},
-                {"field": "f2", "ftype": "textfield", "title": "Club", "value": runner["club"]},
+                {"field": "f2", "ftype": "textfield", "title": "Runnerclub", "value": runner["club"]},
                 {"field": "f4", "ftype": "textfield", "title": "Class", "value": runner["class"]},
                 #TODO: make correct time format
                 {"field": "f5", "ftype": "textfield", "title": "Starttime", "value": runner["start_time"]}
             ]
+
+        return out
+    
+
+    def get_results_by_class_relay(self, cmp, cls):
+        statement = "SELECT cmp.name AS competition, cls.name AS class, runner.id as runner_id, runner.bib, tm.leg, team.name AS team, "
+        statement += "runner.name, org.name AS club, split.rt AS split, runner.st AS start_time, team.st AS team_start_time, team.stat AS team_status, "
+        statement += "runner.rt AS running_time, runner.stat AS `status` "
+        statement += "FROM mopcompetitor AS runner "
+        statement += "JOIN mopradio AS split ON split.id=runner.id AND split.cid=runner.cid "
+        statement += "LEFT JOIN moporganization AS org ON org.id=runner.org AND org.cid=runner.cid "
+        statement += "JOIN mopteammember AS tm ON tm.rid=runner.id AND tm.cid=runner.cid "
+        statement += "JOIN mopteam AS team ON team.id=tm.id "
+        statement += "JOIN mopclass AS cls ON cls.cid=runner.cid AND cls.id=runner.cls "
+        statement += "JOIN mopcompetition AS cmp ON cmp.cid=runner.cid "
+        statement += f"WHERE runner.cls={cls} AND runner.cid={cmp} "
+        statement += "ORDER BY leg, running_time, split"
+        self.cursor.execute(statement)
+        data = self.cursor.fetchall()
+
+        if data is None or len(data) == 0:
+            return "No data"
+
+        out = {
+            "competition": data[0]["competition"],
+            "runner_class": data[0]["class"],
+            "results": {}
+        }
+
+        runner_data = self.calculate_results_relay(data)
+
+        runner_id = -1
+        for runner in data:
+            if runner["runner_id"] == runner_id:    # Same runner
+                continue
+            else:                                   # New runner
+                runner_id = runner["runner_id"]
+
+
+            leg = runner["leg"]
+            
+            #if runner_data[runner_id]. == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
+            #    place = ""
+            #else:
+            #    place = runner_data[runner_id][0]
+            place = runner_data[runner_id].place
+            team_place = runner_data[runner_id].team_place
+
+            if out["results"][f"leg{leg}"] is None:
+                out["results"][f"leg{leg}"] = []
+
+            out["results"][f"leg{leg}"].append({
+                "leg_place": place,
+                "team_place": team_place,
+                "bib": runner["bib"],
+                "name": runner["name"],
+                "team": runner["team"],
+                "club": runner["club"],
+                "splits": runner_data[runner_id].splits,
+                "start_time": runner["start_time"],
+                "running_time": runner["running_time"],
+                "timeplus": runner_data[runner_id].timeplus,
+                "status": runner_data[runner_id].status,
+                "team_status": runner_data[runner_id].team_status
+            })
 
         return out

@@ -1,6 +1,6 @@
 API Endpoints
 
-v1 UPDATED 30/4-2025
+v1.1 UPDATED 4/5-2025
 
 GET: start list containing runner items. 
 KEY: competition + class
@@ -40,15 +40,11 @@ RESPONSE: runner as an array with single item
 Example:
 {
     "competition": "SM Medel Kval",
-    "class": "H21",
-    "runners": [
-        {
-            "bib": "444",
-            "name": "Ferry Fyråsen",
-            "club": "OK Fyran",
-            "start_time": "14:44",
-        },
-    ],
+    "runner_class": "H21",
+    "bib": "444",
+    "name": "Ferry Fyråsen",
+    "club": "OK Fyran",
+    "start_time": "14:44",
 }
 
 För split-tider under tävlingarna:
@@ -76,10 +72,11 @@ Exempel:
     }
 }
 
+Kan anropas i stafett-format
 Exempel /api/{competition}/{class}/splits/{radio_number}?relay
 {
     "competition": "SM Medel Kval",
-    "class": "D21",
+    "runner_class": "D21",
     "split": {
         "id": 150,
         "name": "Radio 2,9 km",
@@ -104,6 +101,8 @@ RESPONSE: Array of radio control objects
 
 Exempel:
 {
+    "competition": "SM Medel Kval"
+    "runner_class": "D21"
     "radiocontrols": [
         {
             "id": 150,
@@ -113,6 +112,45 @@ Exempel:
             "id": 100,
             "name": "Förvarning"
         }
+    ]
+}
+
+Kan anropas i stafett-format
+Exempel:
+{
+    "competition": "SM Medel Kval"
+    "runner_class": "D21"
+    "radiocontrols": [
+        "leg1": [
+            {
+                "id": 150,
+                "name": "Radio 1: 2,9 km"
+            },
+            {
+                "id": 100,
+                "name": "Förvarning"
+            }
+        ],
+        "leg2": [
+            {
+                "id": 150,
+                "name": "Radio 1: 3,5 km"
+            },
+            {
+                "id": 100,
+                "name": "Förvarning"
+            }
+        ],
+        "leg3": [
+            {
+                "id": 150,
+                "name": "Radio 1: 4,1 km"
+            },
+            {
+                "id": 100,
+                "name": "Förvarning"
+            }
+        ],
     ]
 }
 
@@ -126,7 +164,7 @@ Exempel:
     "item1": [
         {"field": "f0", "ftype": "number", "title": "Bib", "value": "444"},
         {"field": "f1", "ftype": "textfield", "title": "Fullname", "value": "Namn Namnsson"},
-        {"field": "f2", "ftype": "textfield", "title": "Club", "value": "OK Tyr"}
+        {"field": "f2", "ftype": "textfield", "title": "Runnerclub", "value": "OK Tyr"}
         {"field": "f4", "ftype": "textfield", "title": "Class", "value": "D21"},
         {"field": "f5", "ftype": "textfield", "title": "Starttime", "value": "12:00"}
     ]
@@ -140,7 +178,7 @@ URL: /api/{competition}/{class}/results
 Exempel:
 {
     "competition": "SM Medel Final",
-    "class": "D21 Final A",
+    "runner_class": "D21 Final A",
     "results": [
         {
             "place": 1,
@@ -150,7 +188,7 @@ Exempel:
             "splits": [1990, 2780, 3910]
             "running_time": 3980,
             "time_after_leader": 0,
-            "status": 1
+            "status": "OK"
         },
         {
             "place": 2
@@ -160,19 +198,99 @@ Exempel:
             "splits": [1950, 2800, 4020]
             "running_time": 4080,
             "time_after_leader": 100,
-            "status": 1
+            "status": "OK"
         },
         {
-            "place": null
+            "place": ""
             "bib": "135",
             "name": "Birgitta Karlsson",
             "club": "Kils OK",
             "splits": [1920, 2650, 3900]
             "running_time": 3960,
             "time_after_leader": null,
-            "status" 3: 
+            "status": "MP"                      # Missing punch
         },
     ]
+}
+
+Kan anropas i stafett-format
+Exempel:
+{
+    "competition": "SM Medel Final",
+    "runner_class": "D21 Final A",
+    "results": {
+        "leg1": [
+            {
+                "leg_place": 1,
+                "team_place": 1,
+                "bib": "114",
+                "name": "Eva Rådberg",
+                "team_name": "Skellefteå OK 1"  # and so on
+                "club": "Skellefteå OK",
+                "splits": [1990, 2780, 3910]
+                "running_time": 3980,
+                "time_after_leader": 0,
+                "status": "OK"
+            },
+            {
+                "leg_place": 2,
+                "team_place": 2,
+                "bib": "125",
+                "name": "Lena Isaksson",
+                "club": "Deje SF",
+                "splits": [1950, 2800, 4020]
+                "running_time": 4080,
+                "time_after_leader": 100,
+                "status": "OK"
+            },
+            {
+                "leg_place": "",
+                "team_place": "",
+                "bib": "135",
+                "name": "Birgitta Karlsson",
+                "club": "Kils OK",
+                "splits": [1920, 2650, 3900]
+                "running_time": 3960,
+                "time_after_leader": null,
+                "status": "MP"                      # Missing punch
+            },
+        ],
+        "leg2": [
+            {
+                "leg_place": 2,
+                "team_place": 1,
+                "bib": "114",
+                "name": "Nora Karlström",
+                "club": "Skellefteå OK",
+                "splits": [1990, 2780, 3910]
+                "running_time": 3980,
+                "time_after_leader": 0,
+                "status": "OK"
+            },
+            {
+                "leg_place": 3,
+                "team_place": 2,
+                "bib": "125",
+                "name": "Maja Örjansson",
+                "club": "Deje SF",
+                "splits": [1950, 2800, 4020]
+                "running_time": 4080,
+                "time_after_leader": 100,
+                "status": "OK"
+            },
+            {
+                "leg_place": 1,
+                "team_place": "",
+                "bib": "135",
+                "name": "Irma Andersson",
+                "club": "Kils OK",
+                "splits": [1920, 2650, 3900]
+                "running_time": 3960,
+                "time_after_leader": null,
+                "status": "MP"                      
+            },
+        ]
+    }
 }
 
 
@@ -184,14 +302,11 @@ Exempel:
 {
     "competition": "SM Medel Final",
     "class": "D21 Final A",
-    "results": {
-        "place": 1,
-        "bib": "114",
-        "name": "Eva Rådberg",
-        "club": "Skellefteå OK",
-        "splits": [1990, 2780, 3910]
-        "running_time": 3980,
-        "time_after_leader": 0,
-        "status": 1
-    }
+    "place": 1,
+    "bib": "114",
+    "name": "Eva Rådberg",
+    "club": "Skellefteå OK",
+    "splits": [1990, 2780, 3910]
+    "running_time": 3980,
+    "time_after_leader": 0,
 }
