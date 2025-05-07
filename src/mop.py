@@ -364,10 +364,14 @@ class MOPService:
         out = {
             "competition": data[0].get("competition"),
             "runner_class": data[0].get("class"),
-            "bib": data[0]["bib"],
-            "runner_club": data[0]["club"],
-            "name": data[0]["name"],
-            "start_time": data[0]["start_time"]
+            "runners": [
+                {
+                    "bib": data[0]["bib"],
+                    "runner_club": data[0]["club"],
+                    "name": data[0]["name"],
+                    "start_time": data[0]["start_time"]
+                }
+            ]
         }
 
         #for runner in data:
@@ -384,10 +388,11 @@ class MOPService:
 
 
     def get_radiocontrols_by_class(self, cmp, cls, is_relay):
-        statement = "SELECT cmp.name AS competition, cls.name AS class, clctrl.ctrl AS id, clctrl.distance AS name, clctrl.ord, clctrl.leg "
+        statement = "SELECT cmp.name AS competition, cls.name AS class, ctrl.name AS radio_name, clctrl.ctrl AS id, clctrl.distance, clctrl.ord, clctrl.leg "
         statement += "FROM mopclass AS cls "
         statement += "JOIN mopclasscontrol AS clctrl ON cls.cid=clctrl.cid AND cls.id=clctrl.id "
         statement += "JOIN mopcompetition as cmp ON cls.cid=cmp.cid "
+        statement += "JOIN mopcontrol AS ctrl ON ctrl.id=clctrl.ctrl AND ctrl.cid=cls.cid "
         statement += f"WHERE cls.id={cls} AND cls.cid={cmp} "
         statement += "ORDER BY leg, ord"
         self.cursor.execute(statement)
@@ -402,18 +407,30 @@ class MOPService:
             "radiocontrols": []
         }
 
+
         if not is_relay:
             for radio in data:
-                out["radiocontrols"].append({"id": radio["id"], "name": radio["name"]})
+                if radio["distance"] is not None:
+                    distance = f"{radio["radio_name"]} {radio["distance"]}"
+                else:
+                    distance = radio["radio_name"]
+                out["radiocontrols"].append({
+                    "id": radio["id"],
+                    "name": distance
+                })
         else:
             out["radiocontrols"] = dict()
             leg = -1
             for radio in data:
+                if radio["distance"] is not None:
+                    distance = f"{radio["radio_name"]} {radio["distance"]}"
+                else:
+                    distance = radio["radio_name"]
                 if radio["leg"] != leg:  # New relay leg
                     leg = radio["leg"]
-                    out["radiocontrols"][f"leg{leg}"] = [{"id": radio["id"], "name": radio["name"]}]
+                    out["radiocontrols"][f"leg{leg}"] = [{"id": radio["id"], "name": distance}]
                 else:
-                    out["radiocontrols"][f"leg{leg}"].append({"id": radio["id"], "name": radio["name"]})
+                    out["radiocontrols"][f"leg{leg}"].append({"id": radio["id"], "name": distance})
 
         return out
     
@@ -469,37 +486,48 @@ class MOPService:
 
     def get_runners_for_split_individual(self, cmp, cls, radio):
         statement = "SELECT DISTINCT cmp.name as competition, cls.name as class, "
-        statement += "radio.ctrl AS id, clctrl.distance, runner.bib, org.`name` AS club, "
-        statement += "runner.name, runner.st AS start_time, radio.rt AS split_time "
+        statement += "radio.ctrl AS id, ctrl.name as radio, clctrl.distance, runner.bib, runner.id as runner_id, org.`name` AS club, "
+        statement += "runner.name, runner.st AS start_time, radio.rt AS split, radio.rt as running_time, 1 as status " #runner.stat as status "
         statement += "FROM mopradio as radio "
         statement += "JOIN mopcompetition AS cmp ON cmp.cid=radio.cid "
         statement += "JOIN mopcompetitor as runner ON runner.id=radio.id AND runner.cid=radio.cid "
-        statement += "JOIN mopclass AS cls ON cls.id=runner.cls "
+        statement += "JOIN mopclass AS cls ON cls.id=runner.cls AND cls.cid=radio.cid "
         statement += "JOIN mopclasscontrol AS clctrl ON clctrl.ctrl=radio.ctrl AND clctrl.id=runner.cls AND clctrl.cid=radio.cid "
+        statement += "JOIN mopcontrol AS ctrl ON ctrl.id=clctrl.ctrl AND ctrl.cid=radio.cid "
         statement += "JOIN moporganization AS org ON org.id=runner.org AND org.cid=radio.cid "
         statement += f"WHERE runner.cls={cls} AND radio.cid={cmp} AND radio.ctrl={radio} "
-        statement += "ORDER by split_time"
+        statement += "ORDER by split"
         self.cursor.execute(statement)
         data = self.cursor.fetchall()
 
         if data is None or len(data) == 0:
             return "No data"
+        
+        if data[0]["distance"] is not None:
+            distance = f"{data[0]["radio"]} {data[0]["distance"]}"
+        else:
+            distance = data[0]["radio"]
 
         out = {
             "competition": data[0]["competition"],
             "runner_class": data[0]["class"],
-            "id": data[0]["id"],
-            "name": data[0]["distance"],
-            "splits": []
+            "split": {
+                "radio_name": distance,
+                "id": data[0]["id"],
+                "runners": []
+            }
         }
 
-        for time in data:
-            out["splits"].append({
-                "bib": time["bib"],
-                "name": time["name"],
-                "club": time["club"],
-                "start_time": time["start_time"],
-                "split_time": time["split_time"]
+        runner_data = self.calculate_results(data)
+
+        for runner in data:
+            out["split"]["runners"].append({
+                "place": runner_data[runner["runner_id"]].place,
+                "bib": runner["bib"],
+                "name": runner["name"],
+                "club": runner["club"],
+                "start_time": runner["start_time"],
+                "split_time": runner["split"],
             })
 
         return out
@@ -535,12 +563,6 @@ class MOPService:
                 continue
             else:                                   # New runner
                 runner_id = runner["runner_id"]
-
-
-            #if runner_data[runner_id][3] == True:    # Don't show place number if runner is disqualified. See calculate_results for definition of runner_data
-            #    place = ""
-            #else:
-            #    place = runner_data[runner_id][0]
 
             out["results"].append({
                 "place": runner_data[runner_id].place,
@@ -593,15 +615,19 @@ class MOPService:
         out = {
             "competition": runner["competition"],
             "runner_class": runner["class"],
-            "place": runner_data[runner_id].place,
-            "bib": runner["bib"],
-            "name": runner["name"],
-            "club": runner["club"],
-            "splits": runner_data[runner_id].splits,
-            "start_time": runner["start_time"],
-            "running_time": runner["running_time"],
-            "timeplus": runner_data[runner_id].timeplus,
-            "status": runner_data[runner_id].status
+            "results": [
+                {
+                    "place": runner_data[runner_id].place,
+                    "bib": runner["bib"],
+                    "name": runner["name"],
+                    "club": runner["club"],
+                    "splits": runner_data[runner_id].splits,
+                    "start_time": runner["start_time"],
+                    "running_time": runner["running_time"],
+                    "timeplus": runner_data[runner_id].timeplus,
+                    "status": runner_data[runner_id].status
+                }
+            ]
         }
 
         return out
@@ -777,5 +803,26 @@ class MOPService:
                 "status": runner_data[runner_id].status,
                 "team_status": runner_data[runner_id].team_status
             })
+
+        return out
+
+
+    def get_all_classes(self, cmp):
+        statement = "SELECT class.id, class.name, cmp.name as competition "
+        statement += "FROM mopclass AS class JOIN mopcompetition as cmp on cmp.cid=class.cid "
+        statement += f"WHERE class.cid={cmp} ORDER BY class.ord"
+        self.cursor.execute(statement)
+        data = self.cursor.fetchall()
+
+        if data is None or len(data) == 0:
+            return "No data"
+        
+        out = {
+            "competition": data[0]["competition"],
+            "classes": {}
+        }
+
+        for cls in data:
+            out["classes"][cls["id"]] = cls["name"]
 
         return out

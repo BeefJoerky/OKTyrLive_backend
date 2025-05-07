@@ -40,8 +40,6 @@ def pretty_print(root):
 def post_comp_data():
     competition_id = request.environ.get('HTTP_COMPETITION')
     pwd = request.environ.get('HTTP_PWD')
-    if competition_id != COMPETITION_ID:
-        return xml_response(mop_response(MOP_STATUS.BADCMP))
     if pwd != PASSWORD:
         return xml_response(mop_response(MOP_STATUS.BADPWD))
     
@@ -49,6 +47,7 @@ def post_comp_data():
     xml_root = et.fromstring(data)
     print(pretty_print(xml_root))
 
+    mop_service.competition_id = competition_id
     response = mop_service.handle_post(xml_root)
 
     response = xml_response(response)
@@ -222,4 +221,10 @@ def get_results_for_class(competition, cls):
 @app.route('/api/<competition>/<cls>/results/<bib>', methods=["GET"])
 def get_results_with_bib_for_class(competition, cls, bib):
     data = mop_service.get_results_by_class_with_bib(competition, cls, bib)
+    return json_response(data)
+
+
+@app.route('/api/<competition>/classes', methods=["GET"])
+def get_all_classes(competition):
+    data = mop_service.get_all_classes(competition)
     return json_response(data)
